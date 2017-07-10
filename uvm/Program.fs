@@ -43,13 +43,13 @@ module OpCodes =
     [<Literal>]
     let Orthography = 13u
 
-type Machine () =
+type Machine (in_stream, out_stream) =
     let registers : uint32 array = [|0u; 0u; 0u; 0u; 0u; 0u; 0u; 0u|]
     let arrays : List<uint32 array> = new List<uint32 array>()
     let mutable pointer = 0u
     let mutable program = [||] // a copy of array 0 for faster access
-    let _in = Console.OpenStandardInput()
-    let out = Console.OpenStandardOutput()
+    let _in : Stream = in_stream
+    let out : Stream = out_stream
 
     member m.Registers = registers
     member m.Arrays = arrays
@@ -115,11 +115,6 @@ let step (machine : Machine) : bool =
         machine.Out.WriteByte((byte) machine.Registers.[c])
         true
     | OpCodes.Input ->
-        //let key = Console.Read()
-        //match (char) key with
-        //| '\r' -> ()
-        //| '\n' -> machine.Registers.[c] <- 0xffu
-        //| _ -> machine.Registers.[c] <- (uint32) (key &&& 0xff)
         let key = machine.In.ReadByte()
         match key with
         | 0x00 -> machine.Registers.[c] <- 0xffu
@@ -146,7 +141,9 @@ let rec run machine : unit =
 [<EntryPoint>]
 let main argv = 
     let script = read_script argv.[0]
-    let machine = Machine()
+    use _in = Console.OpenStandardInput()
+    use out = Console.OpenStandardOutput()
+    let machine = Machine(_in, out)
     machine.LoadProgram script
     run machine
     0
