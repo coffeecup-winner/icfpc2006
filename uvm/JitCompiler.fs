@@ -4,17 +4,61 @@ open System
 open System.Reflection
 open System.Reflection.Emit
 
+let compile (il : ILGenerator) (registers : FieldBuilder array) (instr : uint32) : unit =
+    let opcode = instr &&& 0xf0000000u >>> 28
+    let a = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0001_1100_0000u >>> 6)
+    let b = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0000_0011_1000u >>> 3)
+    let c = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0000_0000_0111u)
+    match opcode with
+    | UvmOpCodes.ConditionalMove ->
+        ()
+    | UvmOpCodes.ArrayIndex ->
+        ()
+    | UvmOpCodes.ArrayAmendment ->
+        ()
+    | UvmOpCodes.Addition ->
+        ()
+    | UvmOpCodes.Multiplication ->
+        ()
+    | UvmOpCodes.Division ->
+        ()
+    | UvmOpCodes.NotAnd ->
+        ()
+    | UvmOpCodes.Halt ->
+        ()
+    | UvmOpCodes.Allocation ->
+        ()
+    | UvmOpCodes.Abandonment ->
+        ()
+    | UvmOpCodes.Output ->
+        ()
+    | UvmOpCodes.Input ->
+        ()
+    | UvmOpCodes.LoadProgram ->
+        ()
+    | UvmOpCodes.Orthography ->
+        let reg = (int32) (instr &&& 0b0000_1110_0000_0000_0000_0000_0000_0000u >>> 25)
+        let value = instr &&& 0b0000_0001_1111_1111_1111_1111_1111_1111u
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldc_I4, (int32) value)
+        il.Emit(OpCodes.Stfld, registers.[reg])
+        ()
+    | x -> invalidOp("Invalid op code: " + x.ToString())
+
 let build (type_builder : TypeBuilder) (script : uint32 array) : unit =
-    type_builder.DefineField("r0", typeof<uint32>, FieldAttributes.Private) |> ignore
-    type_builder.DefineField("r1", typeof<uint32>, FieldAttributes.Private) |> ignore
-    type_builder.DefineField("r2", typeof<uint32>, FieldAttributes.Private) |> ignore
-    type_builder.DefineField("r3", typeof<uint32>, FieldAttributes.Private) |> ignore
-    type_builder.DefineField("r4", typeof<uint32>, FieldAttributes.Private) |> ignore
-    type_builder.DefineField("r5", typeof<uint32>, FieldAttributes.Private) |> ignore
-    type_builder.DefineField("r6", typeof<uint32>, FieldAttributes.Private) |> ignore
-    type_builder.DefineField("r7", typeof<uint32>, FieldAttributes.Private) |> ignore
+    let registers = [|
+        type_builder.DefineField("r0", typeof<uint32>, FieldAttributes.Public)
+        type_builder.DefineField("r1", typeof<uint32>, FieldAttributes.Public)
+        type_builder.DefineField("r2", typeof<uint32>, FieldAttributes.Public)
+        type_builder.DefineField("r3", typeof<uint32>, FieldAttributes.Public)
+        type_builder.DefineField("r4", typeof<uint32>, FieldAttributes.Public)
+        type_builder.DefineField("r5", typeof<uint32>, FieldAttributes.Public)
+        type_builder.DefineField("r6", typeof<uint32>, FieldAttributes.Public)
+        type_builder.DefineField("r7", typeof<uint32>, FieldAttributes.Public)
+    |]
     let method_builder = type_builder.DefineMethod("Run", MethodAttributes.Public)
     let il = method_builder.GetILGenerator()
+    Array.ForEach(script, fun instr -> compile il registers instr)
     il.Emit(OpCodes.Ret)
     ()
 
