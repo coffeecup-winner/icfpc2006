@@ -13,36 +13,6 @@ let read_script filename =
         i <- i + 1
     result
 
-module OpCodes =
-    [<Literal>]
-    let ConditionalMove = 0u
-    [<Literal>]
-    let ArrayIndex = 1u
-    [<Literal>]
-    let ArrayAmendment = 2u
-    [<Literal>]
-    let Addition = 3u
-    [<Literal>]
-    let Multiplication = 4u
-    [<Literal>]
-    let Division = 5u
-    [<Literal>]
-    let NotAnd = 6u
-    [<Literal>]
-    let Halt = 7u
-    [<Literal>]
-    let Allocation = 8u
-    [<Literal>]
-    let Abandonment = 9u
-    [<Literal>]
-    let Output = 10u
-    [<Literal>]
-    let Input = 11u
-    [<Literal>]
-    let LoadProgram = 12u
-    [<Literal>]
-    let Orthography = 13u
-
 type Machine (in_stream, out_stream) =
     let registers : uint32 array = [|0u; 0u; 0u; 0u; 0u; 0u; 0u; 0u|]
     let arrays : List<uint32 array> = new List<uint32 array>()
@@ -78,55 +48,55 @@ let step (machine : Machine) : bool =
     let b = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0000_0011_1000u >>> 3)
     let c = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0000_0000_0111u)
     match opcode with
-    | OpCodes.ConditionalMove ->
+    | UvmOpCodes.ConditionalMove ->
         match machine.Registers.[c] with
         | 0u -> ()
         | _ -> machine.Registers.[a] <- machine.Registers.[b]
         true
-    | OpCodes.ArrayIndex ->
+    | UvmOpCodes.ArrayIndex ->
         machine.Registers.[a] <- machine.Arrays.[(int32) machine.Registers.[b]].[(int32) machine.Registers.[c]]
         true
-    | OpCodes.ArrayAmendment ->
+    | UvmOpCodes.ArrayAmendment ->
         machine.Arrays.[(int32) machine.Registers.[a]].[(int32) machine.Registers.[b]] <- machine.Registers.[c]
         true
-    | OpCodes.Addition ->
+    | UvmOpCodes.Addition ->
         machine.Registers.[a] <- machine.Registers.[b] + machine.Registers.[c]
         true
-    | OpCodes.Multiplication ->
+    | UvmOpCodes.Multiplication ->
         machine.Registers.[a] <- machine.Registers.[b] * machine.Registers.[c]
         true
-    | OpCodes.Division ->
+    | UvmOpCodes.Division ->
         machine.Registers.[a] <- machine.Registers.[b] / machine.Registers.[c]
         true
-    | OpCodes.NotAnd ->
+    | UvmOpCodes.NotAnd ->
         machine.Registers.[a] <- ~~~ (machine.Registers.[b] &&& machine.Registers.[c])
         true
-    | OpCodes.Halt ->
+    | UvmOpCodes.Halt ->
         false
-    | OpCodes.Allocation ->
+    | UvmOpCodes.Allocation ->
         let array = Array.zeroCreate ((int32) machine.Registers.[c])
         machine.Arrays.Add(array)
         machine.Registers.[b] <- (uint32) (machine.Arrays.Count - 1)
         true
-    | OpCodes.Abandonment ->
+    | UvmOpCodes.Abandonment ->
         machine.Arrays.[(int32) machine.Registers.[c]] <- null
         true
-    | OpCodes.Output ->
+    | UvmOpCodes.Output ->
         machine.Out.WriteByte((byte) machine.Registers.[c])
         true
-    | OpCodes.Input ->
+    | UvmOpCodes.Input ->
         let key = machine.In.ReadByte()
         match key with
         | 0x00 -> machine.Registers.[c] <- 0xffu
         | _ -> machine.Registers.[c] <- (uint32) ((byte) key)
         true
-    | OpCodes.LoadProgram ->
+    | UvmOpCodes.LoadProgram ->
         match (int32) machine.Registers.[b] with
         | 0 -> ()
         | id -> machine.LoadProgram machine.Arrays.[id]
         machine.Pointer <- machine.Registers.[c]
         true
-    | OpCodes.Orthography ->
+    | UvmOpCodes.Orthography ->
         let reg = (int32) (instr &&& 0b0000_1110_0000_0000_0000_0000_0000_0000u >>> 25)
         let value = instr &&& 0b0000_0001_1111_1111_1111_1111_1111_1111u
         machine.Registers.[reg] <- value
