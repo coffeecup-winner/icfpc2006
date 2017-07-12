@@ -11,5 +11,6 @@ type IMachine =
     abstract member R5 : uint32 with get, set
     abstract member R6 : uint32 with get, set
     abstract member R7 : uint32 with get, set
+    abstract member Arrays : System.Collections.Generic.List<uint32 array> with get
     abstract member SetIOStreams : Stream -> Stream -> unit
     abstract member Run : unit -> unit

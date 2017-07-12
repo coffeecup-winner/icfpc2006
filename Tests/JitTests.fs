@@ -7,15 +7,18 @@ open Generic
 open JitCompiler
 
 module Emit =
-    let orthography (register : int) (value : uint32) : uint32 =
-        UvmOpCodes.Orthography <<< 28 ||| (uint32) (register &&& 0x7 <<< 25) ||| (value &&& 0x01ffffffu)
-    
     let common (a : int) (b : int) (c : int) : uint32 =
         (uint32) ((a &&& 0x7 <<< 6) ||| (b &&& 0x7 <<< 3) ||| (c &&& 0x7))
     
     let conditional_move (a : int) (b : int) (c : int) : uint32 =
         UvmOpCodes.ConditionalMove <<< 28 ||| common a b c
     
+    let array_index (a : int) (b : int) (c : int) : uint32 =
+        UvmOpCodes.ArrayIndex <<< 28 ||| common a b c
+
+    let array_amendment (a : int) (b : int) (c : int) : uint32 =
+        UvmOpCodes.ArrayAmendment <<< 28 ||| common a b c
+
     let addition (a : int) (b : int) (c : int) : uint32 =
         UvmOpCodes.Addition <<< 28 ||| common a b c
 
@@ -36,6 +39,9 @@ module Emit =
 
     let input (c : int) : uint32 =
         UvmOpCodes.Input <<< 28 ||| common 0 0 c
+
+    let orthography (register : int) (value : uint32) : uint32 =
+        UvmOpCodes.Orthography <<< 28 ||| (uint32) (register &&& 0x7 <<< 25) ||| (value &&& 0x01ffffffu)
 
 [<TestFixture>]
 module JitTests =
@@ -65,6 +71,54 @@ module JitTests =
         Assert.That(machine.R5, Is.EqualTo(4u))
         Assert.That(machine.R6, Is.EqualTo(4u))
         Assert.That(machine.R7, Is.EqualTo(5u))
+    
+    [<Test>]
+    let array_index () =
+        let machine =
+            jit_compile [|
+                Emit.array_index 0 1 2
+                Emit.array_index 3 4 5
+                Emit.array_index 5 6 7
+            |]
+        machine.R1 <- 0u
+        machine.R2 <- 0u
+        machine.R4 <- 0u
+        machine.R5 <- 1u
+        machine.R6 <- 1u
+        machine.R7 <- 0u
+        machine.Arrays.Add [|42u; 100u|]
+        machine.Arrays.Add [|0xffu|]
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo(42u))
+        Assert.That(machine.R1, Is.EqualTo(0u))
+        Assert.That(machine.R2, Is.EqualTo(0u))
+        Assert.That(machine.R3, Is.EqualTo(100u))
+        Assert.That(machine.R4, Is.EqualTo(0u))
+        Assert.That(machine.R5, Is.EqualTo(0xffu))
+        Assert.That(machine.R6, Is.EqualTo(1u))
+        Assert.That(machine.R7, Is.EqualTo(0u))
+
+    [<Test>]
+    let array_amendment () =
+        let machine =
+            jit_compile [|
+                Emit.array_amendment 0 1 2
+                Emit.array_amendment 3 4 5
+                Emit.array_amendment 5 6 7
+            |]
+        machine.R0 <- 0u
+        machine.R1 <- 0u
+        machine.R2 <- 42u
+        machine.R3 <- 0u
+        machine.R4 <- 1u
+        machine.R5 <- 1u
+        machine.R6 <- 0u
+        machine.R7 <- 100u
+        machine.Arrays.Add [|0u; 0u|]
+        machine.Arrays.Add [|0u|]
+        machine.Run()
+        Assert.That(machine.Arrays.[0], Is.EquivalentTo([|42u; 1u|]))
+        Assert.That(machine.Arrays.[1], Is.EquivalentTo([|100u|]))
 
     [<Test>]
     let addition () =

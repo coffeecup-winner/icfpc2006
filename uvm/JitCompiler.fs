@@ -28,6 +28,8 @@ type JitCompiledMachine () =
     val mutable _in : Stream
     [<DefaultValue>]
     val mutable out : Stream
+    [<DefaultValue>]
+    val mutable arrays : System.Collections.Generic.List<uint32 array>
 
     abstract member Run : unit -> unit
 
@@ -64,6 +66,9 @@ type JitCompiledMachine () =
             with get () = this.r7
             and set value = this.r7 <- value
 
+        member this.Arrays
+            with get () = this.arrays
+
         member this.SetIOStreams _in out =
             this._in <- _in
             this.out <- out
@@ -71,7 +76,7 @@ type JitCompiledMachine () =
         member this.Run () =
             this.Run()
 
-let compile (il : ILGenerator) (registers : FieldInfo array) (_in : FieldInfo) (out : FieldInfo) (instr : uint32) : unit =
+let compile (il : ILGenerator) (registers : FieldInfo array) (arrays : FieldInfo) (_in : FieldInfo) (out : FieldInfo) (instr : uint32) : unit =
     let opcode = instr &&& 0xf0000000u >>> 28
     let a = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0001_1100_0000u >>> 6)
     let b = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0000_0011_1000u >>> 3)
@@ -90,9 +95,27 @@ let compile (il : ILGenerator) (registers : FieldInfo array) (_in : FieldInfo) (
         il.Emit(OpCodes.Stfld, registers.[a])
         il.MarkLabel(label)
     | UvmOpCodes.ArrayIndex ->
-        ()
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, arrays)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, registers.[b])
+        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32[] array>>.GetMethod("get_Item"), null)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, registers.[c])
+        il.Emit(OpCodes.Ldelem_U4)
+        il.Emit(OpCodes.Stfld, registers.[a])
     | UvmOpCodes.ArrayAmendment ->
-        ()
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, arrays)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, registers.[a])
+        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32[] array>>.GetMethod("get_Item"), null)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, registers.[b])
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, registers.[c])
+        il.Emit(OpCodes.Stelem_I4)
     | UvmOpCodes.Addition ->
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
@@ -171,10 +194,10 @@ let compile (il : ILGenerator) (registers : FieldInfo array) (_in : FieldInfo) (
         il.Emit(OpCodes.Stfld, registers.[reg])
     | x -> invalidOp("Invalid op code: " + x.ToString())
 
-let build (type_builder : TypeBuilder) (registers : FieldInfo array) (_in : FieldInfo) (out : FieldInfo) (script : uint32 array) : unit =
+let build (type_builder : TypeBuilder) (registers : FieldInfo array) (arrays : FieldInfo) (_in : FieldInfo) (out : FieldInfo) (script : uint32 array) : unit =
     let method_builder = type_builder.DefineMethod("Run", MethodAttributes.Public ||| MethodAttributes.Virtual)
     let il = method_builder.GetILGenerator()
-    Array.ForEach(script, fun instr -> compile il registers _in out instr)
+    Array.ForEach(script, fun instr -> compile il registers arrays _in out instr)
     il.Emit(OpCodes.Ret)
     ()
 
@@ -189,9 +212,18 @@ let jit_compile(script : uint32 array) : IMachine =
         [0..7]
         |> List.map (fun r -> typeof<JitCompiledMachine>.GetField("r" + r.ToString()))
         |> List.toArray
+    let arrays = typeof<JitCompiledMachine>.GetField("arrays")
     let _in = typeof<JitCompiledMachine>.GetField("_in")
     let out = typeof<JitCompiledMachine>.GetField("out")
-    build type_builder registers _in out script
+    let ctor = type_builder.DefineConstructor(MethodAttributes.Public, CallingConventions.HasThis, [||])
+    let il = ctor.GetILGenerator()
+    il.Emit(OpCodes.Ldarg_0)
+    il.Emit(OpCodes.Newobj, typeof<System.Collections.Generic.List<uint32 array>>.GetConstructor([||]))
+    il.Emit(OpCodes.Stfld, arrays)
+    il.Emit(OpCodes.Ldarg_0)
+    il.Emit(OpCodes.Call, typeof<obj>.GetConstructor([||]))
+    il.Emit(OpCodes.Ret)
+    build type_builder registers arrays _in out script
     let _type = type_builder.CreateType()
     // TODO: optionally assembly_builder.Save("UVM.dll")
     Activator.CreateInstance(_type) :?> IMachine
