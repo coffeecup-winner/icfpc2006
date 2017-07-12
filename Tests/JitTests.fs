@@ -1,5 +1,7 @@
 ﻿namespace JitTests
 
+open System.IO
+open System.Text
 open NUnit.Framework
 open Generic
 open JitCompiler
@@ -28,6 +30,12 @@ module Emit =
 
     let halt : uint32 =
         UvmOpCodes.Halt <<< 28
+
+    let output (c : int) : uint32 =
+        UvmOpCodes.Output <<< 28 ||| common 0 0 c
+
+    let input (c : int) : uint32 =
+        UvmOpCodes.Input <<< 28 ||| common 0 0 c
 
 [<TestFixture>]
 module JitTests =
@@ -201,3 +209,56 @@ module JitTests =
         Assert.That(machine.R5, Is.EqualTo(0x01ffffu))
         Assert.That(machine.R6, Is.EqualTo(0x01fffffu))
         Assert.That(machine.R7, Is.EqualTo(0x01ffffffu))
+
+    [<Test>]
+    let output () =
+        let machine =
+            jit_compile [|
+                Emit.output 0
+                Emit.output 1
+                Emit.output 2
+                Emit.output 3
+                Emit.output 4
+                Emit.output 5
+                Emit.output 6
+                Emit.output 7
+            |]
+        machine.R0 <- (uint32) 'a'
+        machine.R1 <- (uint32) 'b'
+        machine.R2 <- (uint32) 'c'
+        machine.R3 <- (uint32) 'd'
+        machine.R4 <- (uint32) 'e'
+        machine.R5 <- (uint32) 'f'
+        machine.R6 <- (uint32) 'g'
+        machine.R7 <- (uint32) 'h'
+        use out_stream = new MemoryStream()
+        machine.SetIOStreams null out_stream
+        machine.Run()
+        Assert.That(Encoding.UTF8.GetString(out_stream.GetBuffer(), 0, 8), Is.EqualTo("abcdefgh"))
+
+    [<Test>]
+    let input () =
+        let machine =
+            jit_compile [|
+                Emit.input 0
+                Emit.input 1
+                Emit.input 2
+                Emit.input 3
+                Emit.input 4
+                Emit.input 5
+                Emit.input 6
+                Emit.input 7
+            |]
+        use in_stream = new MemoryStream()
+        in_stream.Write(Encoding.UTF8.GetBytes("abcdefgh"), 0, 8)
+        in_stream.Position <- 0L
+        machine.SetIOStreams in_stream null
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo((uint32) 'a'))
+        Assert.That(machine.R1, Is.EqualTo((uint32) 'b'))
+        Assert.That(machine.R2, Is.EqualTo((uint32) 'c'))
+        Assert.That(machine.R3, Is.EqualTo((uint32) 'd'))
+        Assert.That(machine.R4, Is.EqualTo((uint32) 'e'))
+        Assert.That(machine.R5, Is.EqualTo((uint32) 'f'))
+        Assert.That(machine.R6, Is.EqualTo((uint32) 'g'))
+        Assert.That(machine.R7, Is.EqualTo((uint32) 'h'))

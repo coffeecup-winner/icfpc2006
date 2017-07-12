@@ -1,6 +1,7 @@
 ﻿module JitCompiler
 
 open System
+open System.IO
 open System.Reflection
 open System.Reflection.Emit
 open Generic
@@ -23,6 +24,10 @@ type JitCompiledMachine () =
     val mutable r6 : uint32
     [<DefaultValue>]
     val mutable r7 : uint32
+    [<DefaultValue>]
+    val mutable _in : Stream
+    [<DefaultValue>]
+    val mutable out : Stream
 
     abstract member Run : unit -> unit
 
@@ -59,10 +64,14 @@ type JitCompiledMachine () =
             with get () = this.r7
             and set value = this.r7 <- value
 
+        member this.SetIOStreams _in out =
+            this._in <- _in
+            this.out <- out
+
         member this.Run () =
             this.Run()
 
-let compile (il : ILGenerator) (registers : FieldInfo array) (instr : uint32) : unit =
+let compile (il : ILGenerator) (registers : FieldInfo array) (_in : FieldInfo) (out : FieldInfo) (instr : uint32) : unit =
     let opcode = instr &&& 0xf0000000u >>> 28
     let a = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0001_1100_0000u >>> 6)
     let b = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0000_0011_1000u >>> 3)
@@ -124,9 +133,34 @@ let compile (il : ILGenerator) (registers : FieldInfo array) (instr : uint32) : 
     | UvmOpCodes.Abandonment ->
         ()
     | UvmOpCodes.Output ->
-        ()
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, out)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, registers.[c])
+        il.Emit(OpCodes.Conv_U1)
+        il.EmitCall(OpCodes.Callvirt, typeof<Stream>.GetMethod("WriteByte"), null)
     | UvmOpCodes.Input ->
-        ()
+        let _else = il.DefineLabel()
+        let _end = il.DefineLabel()
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, _in)
+        il.EmitCall(OpCodes.Callvirt, typeof<Stream>.GetMethod("ReadByte"), null)
+        il.Emit(OpCodes.Dup)
+        // if key == 0
+        il.Emit(OpCodes.Ldc_I4_0)
+        il.Emit(OpCodes.Ceq)
+        il.Emit(OpCodes.Brfalse_S, _else)
+        // then key = 0xff
+        il.Emit(OpCodes.Pop)
+        il.Emit(OpCodes.Ldc_I4, (int32) 0xff)
+        il.Emit(OpCodes.Br_S, _end)
+        // else cast to byte
+        il.MarkLabel(_else)        
+        il.Emit(OpCodes.Conv_U)
+        // store
+        il.MarkLabel(_end)        
+        il.Emit(OpCodes.Stfld, registers.[c])
     | UvmOpCodes.LoadProgram ->
         ()
     | UvmOpCodes.Orthography ->
@@ -137,10 +171,10 @@ let compile (il : ILGenerator) (registers : FieldInfo array) (instr : uint32) : 
         il.Emit(OpCodes.Stfld, registers.[reg])
     | x -> invalidOp("Invalid op code: " + x.ToString())
 
-let build (type_builder : TypeBuilder) (registers : FieldInfo array) (script : uint32 array) : unit =
+let build (type_builder : TypeBuilder) (registers : FieldInfo array) (_in : FieldInfo) (out : FieldInfo) (script : uint32 array) : unit =
     let method_builder = type_builder.DefineMethod("Run", MethodAttributes.Public ||| MethodAttributes.Virtual)
     let il = method_builder.GetILGenerator()
-    Array.ForEach(script, fun instr -> compile il registers instr)
+    Array.ForEach(script, fun instr -> compile il registers _in out instr)
     il.Emit(OpCodes.Ret)
     ()
 
@@ -155,7 +189,9 @@ let jit_compile(script : uint32 array) : IMachine =
         [0..7]
         |> List.map (fun r -> typeof<JitCompiledMachine>.GetField("r" + r.ToString()))
         |> List.toArray
-    build type_builder registers script
+    let _in = typeof<JitCompiledMachine>.GetField("_in")
+    let out = typeof<JitCompiledMachine>.GetField("out")
+    build type_builder registers _in out script
     let _type = type_builder.CreateType()
     // TODO: optionally assembly_builder.Save("UVM.dll")
     Activator.CreateInstance(_type) :?> IMachine
