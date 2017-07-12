@@ -34,6 +34,12 @@ module Emit =
     let halt : uint32 =
         UvmOpCodes.Halt <<< 28
 
+    let allocation (b : int) (c : int) : uint32 =
+        UvmOpCodes.Allocation <<< 28 ||| common 0 b c
+
+    let abandonment (c : int) : uint32 =
+        UvmOpCodes.Abandonment <<< 28 ||| common 0 0 c
+
     let output (c : int) : uint32 =
         UvmOpCodes.Output <<< 28 ||| common 0 0 c
 
@@ -239,30 +245,79 @@ module JitTests =
         Assert.That(machine.R5, Is.EqualTo(0u))
         Assert.That(machine.R6, Is.EqualTo(0u))
         Assert.That(machine.R7, Is.EqualTo(0u))
-
+    
     [<Test>]
-    let orthography () =
+    let allocation () =
         let machine =
             jit_compile [|
-                Emit.orthography 0 0x00u
-                Emit.orthography 1 0x01u
-                Emit.orthography 2 0x01fu
-                Emit.orthography 3 0x01ffu
-                Emit.orthography 4 0x01fffu
-                Emit.orthography 5 0x01ffffu
-                Emit.orthography 6 0x01fffffu
-                Emit.orthography 7 0x01ffffffu
+                Emit.allocation 0 0
+                Emit.allocation 1 1
+                Emit.allocation 2 2
+                Emit.allocation 3 3
+                Emit.allocation 4 4
+                Emit.allocation 5 5
+                Emit.allocation 6 6
+                Emit.allocation 7 7
             |]
-        machine.R0 <- 42u
+        machine.R0 <- 0u
+        machine.R1 <- 10u
+        machine.R2 <- 20u
+        machine.R3 <- 30u
+        machine.R4 <- 40u
+        machine.R5 <- 50u
+        machine.R6 <- 60u
+        machine.R7 <- 70u
         machine.Run()
-        Assert.That(machine.R0, Is.EqualTo(0x00u))
-        Assert.That(machine.R1, Is.EqualTo(0x01u))
-        Assert.That(machine.R2, Is.EqualTo(0x01fu))
-        Assert.That(machine.R3, Is.EqualTo(0x01ffu))
-        Assert.That(machine.R4, Is.EqualTo(0x01fffu))
-        Assert.That(machine.R5, Is.EqualTo(0x01ffffu))
-        Assert.That(machine.R6, Is.EqualTo(0x01fffffu))
-        Assert.That(machine.R7, Is.EqualTo(0x01ffffffu))
+        Assert.That(machine.R0, Is.EqualTo(0u))
+        Assert.That(machine.R1, Is.EqualTo(1u))
+        Assert.That(machine.R2, Is.EqualTo(2u))
+        Assert.That(machine.R3, Is.EqualTo(3u))
+        Assert.That(machine.R4, Is.EqualTo(4u))
+        Assert.That(machine.R5, Is.EqualTo(5u))
+        Assert.That(machine.R6, Is.EqualTo(6u))
+        Assert.That(machine.R7, Is.EqualTo(7u))
+        Assert.That(machine.Arrays.Count, Is.EqualTo(8))
+        Assert.That(machine.Arrays.[0].Length, Is.EqualTo(0))
+        Assert.That(machine.Arrays.[1].Length, Is.EqualTo(10))
+        Assert.That(machine.Arrays.[2].Length, Is.EqualTo(20))
+        Assert.That(machine.Arrays.[3].Length, Is.EqualTo(30))
+        Assert.That(machine.Arrays.[4].Length, Is.EqualTo(40))
+        Assert.That(machine.Arrays.[5].Length, Is.EqualTo(50))
+        Assert.That(machine.Arrays.[6].Length, Is.EqualTo(60))
+        Assert.That(machine.Arrays.[7].Length, Is.EqualTo(70))
+
+    [<Test>]
+    let abandonment () =
+        let machine =
+            jit_compile [|
+                Emit.abandonment 0
+                Emit.abandonment 1
+                Emit.abandonment 2
+                Emit.abandonment 3
+                Emit.abandonment 4
+                Emit.abandonment 5
+                Emit.abandonment 6
+                Emit.abandonment 7
+            |]
+        machine.R0 <- 0u
+        machine.R1 <- 1u
+        machine.R2 <- 2u
+        machine.R3 <- 3u
+        machine.R4 <- 4u
+        machine.R5 <- 5u
+        machine.R6 <- 6u
+        machine.R7 <- 7u
+        machine.Arrays.AddRange(List.replicate 8 [||])
+        machine.Run()
+        Assert.That(machine.Arrays.Count, Is.EqualTo(8))
+        Assert.That(machine.Arrays.[0], Is.Null)
+        Assert.That(machine.Arrays.[1], Is.Null)
+        Assert.That(machine.Arrays.[2], Is.Null)
+        Assert.That(machine.Arrays.[3], Is.Null)
+        Assert.That(machine.Arrays.[4], Is.Null)
+        Assert.That(machine.Arrays.[5], Is.Null)
+        Assert.That(machine.Arrays.[6], Is.Null)
+        Assert.That(machine.Arrays.[7], Is.Null)
 
     [<Test>]
     let output () =
@@ -316,3 +371,27 @@ module JitTests =
         Assert.That(machine.R5, Is.EqualTo((uint32) 'f'))
         Assert.That(machine.R6, Is.EqualTo((uint32) 'g'))
         Assert.That(machine.R7, Is.EqualTo((uint32) 'h'))
+
+    [<Test>]
+    let orthography () =
+        let machine =
+            jit_compile [|
+                Emit.orthography 0 0x00u
+                Emit.orthography 1 0x01u
+                Emit.orthography 2 0x01fu
+                Emit.orthography 3 0x01ffu
+                Emit.orthography 4 0x01fffu
+                Emit.orthography 5 0x01ffffu
+                Emit.orthography 6 0x01fffffu
+                Emit.orthography 7 0x01ffffffu
+            |]
+        machine.R0 <- 42u
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo(0x00u))
+        Assert.That(machine.R1, Is.EqualTo(0x01u))
+        Assert.That(machine.R2, Is.EqualTo(0x01fu))
+        Assert.That(machine.R3, Is.EqualTo(0x01ffu))
+        Assert.That(machine.R4, Is.EqualTo(0x01fffu))
+        Assert.That(machine.R5, Is.EqualTo(0x01ffffu))
+        Assert.That(machine.R6, Is.EqualTo(0x01fffffu))
+        Assert.That(machine.R7, Is.EqualTo(0x01ffffffu))

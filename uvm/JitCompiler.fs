@@ -152,9 +152,26 @@ let compile (il : ILGenerator) (registers : FieldInfo array) (arrays : FieldInfo
     | UvmOpCodes.Halt ->
         il.Emit(OpCodes.Ret)
     | UvmOpCodes.Allocation ->
-        ()
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, arrays)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, registers.[c])
+        il.Emit(OpCodes.Newarr, typeof<uint32>)
+        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32 array>>.GetMethod("Add"), null)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, arrays)
+        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32 array>>.GetMethod("get_Count"), null)
+        il.Emit(OpCodes.Ldc_I4_1)
+        il.Emit(OpCodes.Sub)
+        il.Emit(OpCodes.Stfld, registers.[b])
     | UvmOpCodes.Abandonment ->
-        ()
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, arrays)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, registers.[c])
+        il.Emit(OpCodes.Ldnull)
+        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32 array>>.GetMethod("set_Item"), null)
     | UvmOpCodes.Output ->
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldfld, out)
