@@ -63,6 +63,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="IMachine.fs" />
     <Compile Include="UvmOpCodes.fs" />
     <Compile Include="JitCompiler.fs" />
     <Compile Include="Program.fs" />

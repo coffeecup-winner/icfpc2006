@@ -3,8 +3,66 @@
 open System
 open System.Reflection
 open System.Reflection.Emit
+open Generic
 
-let compile (il : ILGenerator) (registers : FieldBuilder array) (instr : uint32) : unit =
+[<AbstractClass>]
+type JitCompiledMachine () =
+    [<DefaultValue>]
+    val mutable r0 : uint32
+    [<DefaultValue>]
+    val mutable r1 : uint32
+    [<DefaultValue>]
+    val mutable r2 : uint32
+    [<DefaultValue>]
+    val mutable r3 : uint32
+    [<DefaultValue>]
+    val mutable r4 : uint32
+    [<DefaultValue>]
+    val mutable r5 : uint32
+    [<DefaultValue>]
+    val mutable r6 : uint32
+    [<DefaultValue>]
+    val mutable r7 : uint32
+
+    abstract member Run : unit -> unit
+
+    interface IMachine with
+        member this.R0
+            with get () = this.r0
+            and set value = this.r0 <- value
+
+        member this.R1
+            with get () = this.r1
+            and set value = this.r1 <- value
+
+        member this.R2
+            with get () = this.r2
+            and set value = this.r2 <- value
+
+        member this.R3
+            with get () = this.r3
+            and set value = this.r3 <- value
+
+        member this.R4
+            with get () = this.r4
+            and set value = this.r4 <- value
+
+        member this.R5
+            with get () = this.r5
+            and set value = this.r5 <- value
+
+        member this.R6
+            with get () = this.r6
+            and set value = this.r6 <- value
+
+        member this.R7
+            with get () = this.r7
+            and set value = this.r7 <- value
+
+        member this.Run () =
+            this.Run()
+
+let compile (il : ILGenerator) (registers : FieldInfo array) (instr : uint32) : unit =
     let opcode = instr &&& 0xf0000000u >>> 28
     let a = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0001_1100_0000u >>> 6)
     let b = (int32) (instr &&& 0b0000_0000_0000_0000_0000_0000_0011_1000u >>> 3)
@@ -79,31 +137,25 @@ let compile (il : ILGenerator) (registers : FieldBuilder array) (instr : uint32)
         il.Emit(OpCodes.Stfld, registers.[reg])
     | x -> invalidOp("Invalid op code: " + x.ToString())
 
-let build (type_builder : TypeBuilder) (script : uint32 array) : unit =
-    let registers = [|
-        type_builder.DefineField("r0", typeof<uint32>, FieldAttributes.Public)
-        type_builder.DefineField("r1", typeof<uint32>, FieldAttributes.Public)
-        type_builder.DefineField("r2", typeof<uint32>, FieldAttributes.Public)
-        type_builder.DefineField("r3", typeof<uint32>, FieldAttributes.Public)
-        type_builder.DefineField("r4", typeof<uint32>, FieldAttributes.Public)
-        type_builder.DefineField("r5", typeof<uint32>, FieldAttributes.Public)
-        type_builder.DefineField("r6", typeof<uint32>, FieldAttributes.Public)
-        type_builder.DefineField("r7", typeof<uint32>, FieldAttributes.Public)
-    |]
-    let method_builder = type_builder.DefineMethod("Run", MethodAttributes.Public)
+let build (type_builder : TypeBuilder) (registers : FieldInfo array) (script : uint32 array) : unit =
+    let method_builder = type_builder.DefineMethod("Run", MethodAttributes.Public ||| MethodAttributes.Virtual)
     let il = method_builder.GetILGenerator()
     Array.ForEach(script, fun instr -> compile il registers instr)
     il.Emit(OpCodes.Ret)
     ()
 
-let jit_compile(script : uint32 array) =
+let jit_compile(script : uint32 array) : IMachine =
     let assembly_name = new AssemblyName()
     assembly_name.Name <- "UVM"
     let domain = AppDomain.CurrentDomain
     let assembly_builder = domain.DefineDynamicAssembly(assembly_name, AssemblyBuilderAccess.RunAndSave)
     let module_builder = assembly_builder.DefineDynamicModule(assembly_name.Name, "UVM.dll")
-    let type_builder = module_builder.DefineType("UVM.Machine", TypeAttributes.Public ||| TypeAttributes.Class)
-    build type_builder script
+    let type_builder = module_builder.DefineType("UVM.Machine", TypeAttributes.Public ||| TypeAttributes.Class, typeof<JitCompiledMachine>)
+    let registers =
+        [0..7]
+        |> List.map (fun r -> typeof<JitCompiledMachine>.GetField("r" + r.ToString()))
+        |> List.toArray
+    build type_builder registers script
     let _type = type_builder.CreateType()
     // TODO: optionally assembly_builder.Save("UVM.dll")
-    _type
+    Activator.CreateInstance(_type) :?> IMachine

@@ -1,7 +1,7 @@
 ﻿namespace JitTests
 
-open System
 open NUnit.Framework
+open Generic
 open JitCompiler
 
 module Emit =
@@ -31,156 +31,132 @@ module Emit =
 
 [<TestFixture>]
 module JitTests =
-    let uncurry f (a, b) = f a b
-
-    let run (_type : Type) (register_overrides : (string * uint32) list) =
-        let method = _type.GetMethod("Run")
-        let instance = Activator.CreateInstance(_type)
-        register_overrides
-        |> List.map (fun (r, v) -> (_type.GetField(r).SetValue(instance, v)))
-        |> ignore
-        method.Invoke(instance, [||]) |> ignore
-        instance
-
-    let assert_register (_type : Type) (machine : obj) (register : int) (value : uint32) : unit =
-        Assert.That(_type.GetField("r" + register.ToString()).GetValue(machine), Is.EqualTo(value))
-
     [<Test>]
     let empty_script () =
         jit_compile [||] |> ignore
     
     [<Test>]
     let conditional_move () =
-        let _type =
+        let machine =
             jit_compile [|
                 Emit.conditional_move 0 1 2
                 Emit.conditional_move 3 4 5
                 Emit.conditional_move 5 6 7
             |]
-        let machine =
-            run _type [
-                "r1", 1u
-                "r4", 2u
-                "r5", 3u
-                "r6", 4u
-                "r7", 5u
-            ]
-        assert_register _type machine 0 0u
-        assert_register _type machine 1 1u
-        assert_register _type machine 2 0u
-        assert_register _type machine 3 2u
-        assert_register _type machine 4 2u
-        assert_register _type machine 5 4u
-        assert_register _type machine 6 4u
-        assert_register _type machine 7 5u
+        machine.R1 <- 1u
+        machine.R4 <- 2u
+        machine.R5 <- 3u
+        machine.R6 <- 4u
+        machine.R7 <- 5u
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo(0u))
+        Assert.That(machine.R1, Is.EqualTo(1u))
+        Assert.That(machine.R2, Is.EqualTo(0u))
+        Assert.That(machine.R3, Is.EqualTo(2u))
+        Assert.That(machine.R4, Is.EqualTo(2u))
+        Assert.That(machine.R5, Is.EqualTo(4u))
+        Assert.That(machine.R6, Is.EqualTo(4u))
+        Assert.That(machine.R7, Is.EqualTo(5u))
 
     [<Test>]
     let addition () =
-        let _type =
+        let machine =
             jit_compile [|
                 Emit.addition 0 1 2
                 Emit.addition 3 4 5
                 Emit.addition 5 6 7
             |]
-        let machine =
-            run _type [
-                "r1", 0u
-                "r2", 1u
-                "r4", 2u
-                "r5", 3u
-                "r6", 0xffffffffu
-                "r7", 5u
-            ]
-        assert_register _type machine 0 1u
-        assert_register _type machine 1 0u
-        assert_register _type machine 2 1u
-        assert_register _type machine 3 5u
-        assert_register _type machine 4 2u
-        assert_register _type machine 5 4u
-        assert_register _type machine 6 0xffffffffu
-        assert_register _type machine 7 5u
+        machine.R1 <- 0u
+        machine.R2 <- 1u
+        machine.R4 <- 2u
+        machine.R5 <- 3u
+        machine.R6 <- 0xffffffffu
+        machine.R7 <- 5u
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo(1u))
+        Assert.That(machine.R1, Is.EqualTo(0u))
+        Assert.That(machine.R2, Is.EqualTo(1u))
+        Assert.That(machine.R3, Is.EqualTo(5u))
+        Assert.That(machine.R4, Is.EqualTo(2u))
+        Assert.That(machine.R5, Is.EqualTo(4u))
+        Assert.That(machine.R6, Is.EqualTo(0xffffffffu))
+        Assert.That(machine.R7, Is.EqualTo(5u))
 
     [<Test>]
     let multiplication () =
-        let _type =
+        let machine =
             jit_compile [|
                 Emit.multiplication 0 1 2
                 Emit.multiplication 3 4 5
                 Emit.multiplication 5 6 7
             |]
-        let machine =
-            run _type [
-                "r1", 0u
-                "r2", 1u
-                "r4", 2u
-                "r5", 3u
-                "r6", 0xffffffffu
-                "r7", 5u
-            ]
-        assert_register _type machine 0 0u
-        assert_register _type machine 1 0u
-        assert_register _type machine 2 1u
-        assert_register _type machine 3 6u
-        assert_register _type machine 4 2u
-        assert_register _type machine 5 0xfffffffbu
-        assert_register _type machine 6 0xffffffffu
-        assert_register _type machine 7 5u
+        machine.R1 <- 0u
+        machine.R2 <- 1u
+        machine.R4 <- 2u
+        machine.R5 <- 3u
+        machine.R6 <- 0xffffffffu
+        machine.R7 <- 5u
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo(0u))
+        Assert.That(machine.R1, Is.EqualTo(0u))
+        Assert.That(machine.R2, Is.EqualTo(1u))
+        Assert.That(machine.R3, Is.EqualTo(6u))
+        Assert.That(machine.R4, Is.EqualTo(2u))
+        Assert.That(machine.R5, Is.EqualTo(0xfffffffbu))
+        Assert.That(machine.R6, Is.EqualTo(0xffffffffu))
+        Assert.That(machine.R7, Is.EqualTo(5u))
     
     [<Test>]
     let division () =
-        let _type =
+        let machine =
             jit_compile [|
                 Emit.division 0 1 2
                 Emit.division 3 4 5
                 Emit.division 5 6 7
             |]
-        let machine =
-            run _type [
-                "r1", 0u
-                "r2", 1u
-                "r4", 2u
-                "r5", 3u
-                "r6", 0xffffffffu
-                "r7", 5u
-            ]
-        assert_register _type machine 0 0u
-        assert_register _type machine 1 0u
-        assert_register _type machine 2 1u
-        assert_register _type machine 3 0u
-        assert_register _type machine 4 2u
-        assert_register _type machine 5 0x33333333u
-        assert_register _type machine 6 0xffffffffu
-        assert_register _type machine 7 5u
+        machine.R1 <- 0u
+        machine.R2 <- 1u
+        machine.R4 <- 2u
+        machine.R5 <- 3u
+        machine.R6 <- 0xffffffffu
+        machine.R7 <- 5u
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo(0u))
+        Assert.That(machine.R1, Is.EqualTo(0u))
+        Assert.That(machine.R2, Is.EqualTo(1u))
+        Assert.That(machine.R3, Is.EqualTo(0u))
+        Assert.That(machine.R4, Is.EqualTo(2u))
+        Assert.That(machine.R5, Is.EqualTo(0x33333333u))
+        Assert.That(machine.R6, Is.EqualTo(0xffffffffu))
+        Assert.That(machine.R7, Is.EqualTo(5u))
 
     [<Test>]
     let not_and () =
-        let _type =
+        let machine =
             jit_compile [|
                 Emit.not_and 0 1 2
                 Emit.not_and 3 4 5
                 Emit.not_and 5 6 7
             |]
-        let machine =
-            run _type [
-                "r1", 0u
-                "r2", 0xffffffffu
-                "r4", 0xffffffffu
-                "r5", 0xffffffffu
-                "r6", 0xffffffffu
-                "r7", 0xaaaaaaaau
-            ]
-        assert_register _type machine 0 0xffffffffu
-        assert_register _type machine 1 0u
-        assert_register _type machine 2 0xffffffffu
-        assert_register _type machine 3 0u
-        assert_register _type machine 4 0xffffffffu
-        assert_register _type machine 5 0x55555555u
-        assert_register _type machine 6 0xffffffffu
-        assert_register _type machine 7 0xaaaaaaaau
+        machine.R1 <- 0u
+        machine.R2 <- 0xffffffffu
+        machine.R4 <- 0xffffffffu
+        machine.R5 <- 0xffffffffu
+        machine.R6 <- 0xffffffffu
+        machine.R7 <- 0xaaaaaaaau
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo(0xffffffffu))
+        Assert.That(machine.R1, Is.EqualTo(0u))
+        Assert.That(machine.R2, Is.EqualTo(0xffffffffu))
+        Assert.That(machine.R3, Is.EqualTo(0u))
+        Assert.That(machine.R4, Is.EqualTo(0xffffffffu))
+        Assert.That(machine.R5, Is.EqualTo(0x55555555u))
+        Assert.That(machine.R6, Is.EqualTo(0xffffffffu))
+        Assert.That(machine.R7, Is.EqualTo(0xaaaaaaaau))
 
     [<Test>]
     let halt () =
-        let _type =
+        let machine =
             jit_compile [|
                 Emit.orthography 0 42u
                 Emit.orthography 1 42u
@@ -192,35 +168,36 @@ module JitTests =
                 Emit.orthography 6 42u
                 Emit.orthography 7 42u
             |]
-        let machine =
-            run _type []
-        assert_register _type machine 0 42u
-        assert_register _type machine 1 42u
-        assert_register _type machine 2 42u
-        assert_register _type machine 3 42u
-        assert_register _type machine 4 0u
-        assert_register _type machine 5 0u
-        assert_register _type machine 6 0u
-        assert_register _type machine 7 0u
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo(42u))
+        Assert.That(machine.R1, Is.EqualTo(42u))
+        Assert.That(machine.R2, Is.EqualTo(42u))
+        Assert.That(machine.R3, Is.EqualTo(42u))
+        Assert.That(machine.R4, Is.EqualTo(0u))
+        Assert.That(machine.R5, Is.EqualTo(0u))
+        Assert.That(machine.R6, Is.EqualTo(0u))
+        Assert.That(machine.R7, Is.EqualTo(0u))
 
     [<Test>]
     let orthography () =
-        let register_data = [
-            0, 0x00u
-            1, 0x01u
-            2, 0x01fu
-            3, 0x01ffu
-            4, 0x01fffu
-            5, 0x01ffffu
-            6, 0x01fffffu
-            7, 0x01ffffffu
-        ]
-        let script =
-            register_data
-            |> List.map (uncurry Emit.orthography)
-            |> List.toArray
-        let _type = jit_compile script
-        let machine = run _type ["r0", 42u]
-        register_data
-        |> List.map (uncurry (assert_register _type machine))
-        |> ignore
+        let machine =
+            jit_compile [|
+                Emit.orthography 0 0x00u
+                Emit.orthography 1 0x01u
+                Emit.orthography 2 0x01fu
+                Emit.orthography 3 0x01ffu
+                Emit.orthography 4 0x01fffu
+                Emit.orthography 5 0x01ffffu
+                Emit.orthography 6 0x01fffffu
+                Emit.orthography 7 0x01ffffffu
+            |]
+        machine.R0 <- 42u
+        machine.Run()
+        Assert.That(machine.R0, Is.EqualTo(0x00u))
+        Assert.That(machine.R1, Is.EqualTo(0x01u))
+        Assert.That(machine.R2, Is.EqualTo(0x01fu))
+        Assert.That(machine.R3, Is.EqualTo(0x01ffu))
+        Assert.That(machine.R4, Is.EqualTo(0x01fffu))
+        Assert.That(machine.R5, Is.EqualTo(0x01ffffu))
+        Assert.That(machine.R6, Is.EqualTo(0x01fffffu))
+        Assert.That(machine.R7, Is.EqualTo(0x01ffffffu))
