@@ -1,13 +1,13 @@
 ﻿module JitCompiler
 
 open System
+open System.Collections.Generic
 open System.IO
 open System.Reflection
 open System.Reflection.Emit
 open Generic
 
-[<AbstractClass>]
-type JitCompiledMachine () =
+type JitCompiledMachineData () =
     [<DefaultValue>]
     val mutable r0 : uint32
     [<DefaultValue>]
@@ -30,51 +30,11 @@ type JitCompiledMachine () =
     val mutable out : Stream
     [<DefaultValue>]
     val mutable arrays : System.Collections.Generic.List<uint32 array>
-
-    abstract member Run : unit -> unit
-
-    interface IMachine with
-        member this.R0
-            with get () = this.r0
-            and set value = this.r0 <- value
-
-        member this.R1
-            with get () = this.r1
-            and set value = this.r1 <- value
-
-        member this.R2
-            with get () = this.r2
-            and set value = this.r2 <- value
-
-        member this.R3
-            with get () = this.r3
-            and set value = this.r3 <- value
-
-        member this.R4
-            with get () = this.r4
-            and set value = this.r4 <- value
-
-        member this.R5
-            with get () = this.r5
-            and set value = this.r5 <- value
-
-        member this.R6
-            with get () = this.r6
-            and set value = this.r6 <- value
-
-        member this.R7
-            with get () = this.r7
-            and set value = this.r7 <- value
-
-        member this.Arrays
-            with get () = this.arrays
-
-        member this.SetIOStreams _in out =
-            this._in <- _in
-            this.out <- out
-
-        member this.Run () =
-            this.Run()
+    
+let new_machine_data () : JitCompiledMachineData =
+    let data = new JitCompiledMachineData()
+    data.arrays <- new System.Collections.Generic.List<uint32 array>()
+    data
 
 let compile (il : ILGenerator) (registers : FieldInfo array) (arrays : FieldInfo) (_in : FieldInfo) (out : FieldInfo) (instr : uint32) : unit =
     let opcode = instr &&& 0xf0000000u >>> 28
@@ -150,6 +110,7 @@ let compile (il : ILGenerator) (registers : FieldInfo array) (arrays : FieldInfo
         il.Emit(OpCodes.Not)
         il.Emit(OpCodes.Stfld, registers.[a])
     | UvmOpCodes.Halt ->
+        il.Emit(OpCodes.Ldc_I4, (int) 0xffffffff)
         il.Emit(OpCodes.Ret)
     | UvmOpCodes.Allocation ->
         il.Emit(OpCodes.Ldarg_0)
@@ -211,36 +172,76 @@ let compile (il : ILGenerator) (registers : FieldInfo array) (arrays : FieldInfo
         il.Emit(OpCodes.Stfld, registers.[reg])
     | x -> invalidOp("Invalid op code: " + x.ToString())
 
-let build (type_builder : TypeBuilder) (registers : FieldInfo array) (arrays : FieldInfo) (_in : FieldInfo) (out : FieldInfo) (script : uint32 array) : unit =
-    let method_builder = type_builder.DefineMethod("Run", MethodAttributes.Public ||| MethodAttributes.Virtual)
-    let il = method_builder.GetILGenerator()
+let build (il : ILGenerator) (registers : FieldInfo array) (arrays : FieldInfo) (_in : FieldInfo) (out : FieldInfo) (script : uint32 array) : unit =
     Array.ForEach(script, fun instr -> compile il registers arrays _in out instr)
+    il.Emit(OpCodes.Ldc_I4, (int) 0xffffffff)
     il.Emit(OpCodes.Ret)
-    ()
 
-let jit_compile(script : uint32 array) : IMachine =
-    let assembly_name = new AssemblyName()
-    assembly_name.Name <- "UVM"
-    let domain = AppDomain.CurrentDomain
-    let assembly_builder = domain.DefineDynamicAssembly(assembly_name, AssemblyBuilderAccess.RunAndSave)
-    let module_builder = assembly_builder.DefineDynamicModule(assembly_name.Name, "UVM.dll")
-    let type_builder = module_builder.DefineType("UVM.Machine", TypeAttributes.Public ||| TypeAttributes.Class, typeof<JitCompiledMachine>)
+let jit_compile (pc : uint32) (script : uint32 array) : Func<JitCompiledMachineData, uint32> =
+    let method = new DynamicMethod("run_UVM_" + pc.ToString("x8"), typeof<uint32>, [|typeof<JitCompiledMachineData>|], typeof<JitCompiledMachineData>)
     let registers =
         [0..7]
-        |> List.map (fun r -> typeof<JitCompiledMachine>.GetField("r" + r.ToString()))
+        |> List.map (fun r -> typeof<JitCompiledMachineData>.GetField("r" + r.ToString()))
         |> List.toArray
-    let arrays = typeof<JitCompiledMachine>.GetField("arrays")
-    let _in = typeof<JitCompiledMachine>.GetField("_in")
-    let out = typeof<JitCompiledMachine>.GetField("out")
-    let ctor = type_builder.DefineConstructor(MethodAttributes.Public, CallingConventions.HasThis, [||])
-    let il = ctor.GetILGenerator()
-    il.Emit(OpCodes.Ldarg_0)
-    il.Emit(OpCodes.Newobj, typeof<System.Collections.Generic.List<uint32 array>>.GetConstructor([||]))
-    il.Emit(OpCodes.Stfld, arrays)
-    il.Emit(OpCodes.Ldarg_0)
-    il.Emit(OpCodes.Call, typeof<obj>.GetConstructor([||]))
-    il.Emit(OpCodes.Ret)
-    build type_builder registers arrays _in out script
-    let _type = type_builder.CreateType()
-    // TODO: optionally assembly_builder.Save("UVM.dll")
-    Activator.CreateInstance(_type) :?> IMachine
+    let arrays = typeof<JitCompiledMachineData>.GetField("arrays")
+    let _in = typeof<JitCompiledMachineData>.GetField("_in")
+    let out = typeof<JitCompiledMachineData>.GetField("out")
+    let il = method.GetILGenerator()
+    build il registers arrays _in out script
+    method.CreateDelegate(typeof<Func<JitCompiledMachineData, uint32>>) :?> Func<JitCompiledMachineData, uint32>
+
+type JitCompiledMachine () =
+    let data : JitCompiledMachineData = new_machine_data()
+
+    member private this.Run (data : JitCompiledMachineData) (script : uint32 array) : unit =
+        let code_cache = new Dictionary<uint32, Func<JitCompiledMachineData, uint32>>()
+        let mutable pc : uint32 = 0u
+        while (pc <> 0xffffffffu) do
+            let code : Func<JitCompiledMachineData, uint32> ref = ref null
+            if not (code_cache.TryGetValue(pc, code)) then
+                code.Value <- jit_compile pc script
+                code_cache.Add(pc, !code)
+            pc <- (!code).Invoke(data)
+
+    interface IMachine with
+        member this.R0
+            with get () = data.r0
+            and set value = data.r0 <- value
+
+        member this.R1
+            with get () = data.r1
+            and set value = data.r1 <- value
+
+        member this.R2
+            with get () = data.r2
+            and set value = data.r2 <- value
+
+        member this.R3
+            with get () = data.r3
+            and set value = data.r3 <- value
+
+        member this.R4
+            with get () = data.r4
+            and set value = data.r4 <- value
+
+        member this.R5
+            with get () = data.r5
+            and set value = data.r5 <- value
+
+        member this.R6
+            with get () = data.r6
+            and set value = data.r6 <- value
+
+        member this.R7
+            with get () = data.r7
+            and set value = data.r7 <- value
+
+        member this.Arrays
+            with get () = data.arrays
+
+        member this.SetIOStreams _in out =
+            data._in <- _in
+            data.out <- out
+
+        member this.Run (script : uint32 array) =
+            this.Run data script
