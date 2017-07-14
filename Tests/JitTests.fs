@@ -46,6 +46,9 @@ module Emit =
     let input (c : int) : uint32 =
         UvmOpCodes.Input <<< 28 ||| common 0 0 c
 
+    let load_program (b : int) (c : int) : uint32 =
+        UvmOpCodes.LoadProgram <<< 28 ||| common 0 b c
+
     let orthography (register : int) (value : uint32) : uint32 =
         UvmOpCodes.Orthography <<< 28 ||| (uint32) (register &&& 0x7 <<< 25) ||| (value &&& 0x01ffffffu)
 
@@ -82,11 +85,11 @@ module JitTests =
     [<Test>]
     let array_index () =
         let machine = new_machine()
-        machine.R1 <- 0u
+        machine.R1 <- 1u
         machine.R2 <- 0u
-        machine.R4 <- 0u
+        machine.R4 <- 1u
         machine.R5 <- 1u
-        machine.R6 <- 1u
+        machine.R6 <- 2u
         machine.R7 <- 0u
         machine.Arrays.Add [|42u; 100u|]
         machine.Arrays.Add [|0xffu|]
@@ -96,23 +99,23 @@ module JitTests =
             Emit.array_index 5 6 7
         |]
         Assert.That(machine.R0, Is.EqualTo(42u))
-        Assert.That(machine.R1, Is.EqualTo(0u))
+        Assert.That(machine.R1, Is.EqualTo(1u))
         Assert.That(machine.R2, Is.EqualTo(0u))
         Assert.That(machine.R3, Is.EqualTo(100u))
-        Assert.That(machine.R4, Is.EqualTo(0u))
+        Assert.That(machine.R4, Is.EqualTo(1u))
         Assert.That(machine.R5, Is.EqualTo(0xffu))
-        Assert.That(machine.R6, Is.EqualTo(1u))
+        Assert.That(machine.R6, Is.EqualTo(2u))
         Assert.That(machine.R7, Is.EqualTo(0u))
 
     [<Test>]
     let array_amendment () =
         let machine = new_machine()
-        machine.R0 <- 0u
+        machine.R0 <- 1u
         machine.R1 <- 0u
         machine.R2 <- 42u
-        machine.R3 <- 0u
+        machine.R3 <- 1u
         machine.R4 <- 1u
-        machine.R5 <- 1u
+        machine.R5 <- 2u
         machine.R6 <- 0u
         machine.R7 <- 100u
         machine.Arrays.Add [|0u; 0u|]
@@ -122,8 +125,8 @@ module JitTests =
             Emit.array_amendment 3 4 5
             Emit.array_amendment 5 6 7
         |]
-        Assert.That(machine.Arrays.[0], Is.EquivalentTo([|42u; 1u|]))
-        Assert.That(machine.Arrays.[1], Is.EquivalentTo([|100u|]))
+        Assert.That(machine.Arrays.[1], Is.EquivalentTo([|42u; 2u|]))
+        Assert.That(machine.Arrays.[2], Is.EquivalentTo([|100u|]))
 
     [<Test>]
     let addition () =
@@ -261,35 +264,35 @@ module JitTests =
             Emit.allocation 6 6
             Emit.allocation 7 7
         |]
-        Assert.That(machine.R0, Is.EqualTo(0u))
-        Assert.That(machine.R1, Is.EqualTo(1u))
-        Assert.That(machine.R2, Is.EqualTo(2u))
-        Assert.That(machine.R3, Is.EqualTo(3u))
-        Assert.That(machine.R4, Is.EqualTo(4u))
-        Assert.That(machine.R5, Is.EqualTo(5u))
-        Assert.That(machine.R6, Is.EqualTo(6u))
-        Assert.That(machine.R7, Is.EqualTo(7u))
-        Assert.That(machine.Arrays.Count, Is.EqualTo(8))
-        Assert.That(machine.Arrays.[0].Length, Is.EqualTo(0))
-        Assert.That(machine.Arrays.[1].Length, Is.EqualTo(10))
-        Assert.That(machine.Arrays.[2].Length, Is.EqualTo(20))
-        Assert.That(machine.Arrays.[3].Length, Is.EqualTo(30))
-        Assert.That(machine.Arrays.[4].Length, Is.EqualTo(40))
-        Assert.That(machine.Arrays.[5].Length, Is.EqualTo(50))
-        Assert.That(machine.Arrays.[6].Length, Is.EqualTo(60))
-        Assert.That(machine.Arrays.[7].Length, Is.EqualTo(70))
+        Assert.That(machine.R0, Is.EqualTo(1u))
+        Assert.That(machine.R1, Is.EqualTo(2u))
+        Assert.That(machine.R2, Is.EqualTo(3u))
+        Assert.That(machine.R3, Is.EqualTo(4u))
+        Assert.That(machine.R4, Is.EqualTo(5u))
+        Assert.That(machine.R5, Is.EqualTo(6u))
+        Assert.That(machine.R6, Is.EqualTo(7u))
+        Assert.That(machine.R7, Is.EqualTo(8u))
+        Assert.That(machine.Arrays.Count, Is.EqualTo(9))
+        Assert.That(machine.Arrays.[1].Length, Is.EqualTo(0))
+        Assert.That(machine.Arrays.[2].Length, Is.EqualTo(10))
+        Assert.That(machine.Arrays.[3].Length, Is.EqualTo(20))
+        Assert.That(machine.Arrays.[4].Length, Is.EqualTo(30))
+        Assert.That(machine.Arrays.[5].Length, Is.EqualTo(40))
+        Assert.That(machine.Arrays.[6].Length, Is.EqualTo(50))
+        Assert.That(machine.Arrays.[7].Length, Is.EqualTo(60))
+        Assert.That(machine.Arrays.[8].Length, Is.EqualTo(70))
 
     [<Test>]
     let abandonment () =
         let machine = new_machine()
-        machine.R0 <- 0u
-        machine.R1 <- 1u
-        machine.R2 <- 2u
-        machine.R3 <- 3u
-        machine.R4 <- 4u
-        machine.R5 <- 5u
-        machine.R6 <- 6u
-        machine.R7 <- 7u
+        machine.R0 <- 1u
+        machine.R1 <- 2u
+        machine.R2 <- 3u
+        machine.R3 <- 4u
+        machine.R4 <- 5u
+        machine.R5 <- 6u
+        machine.R6 <- 7u
+        machine.R7 <- 8u
         machine.Arrays.AddRange(List.replicate 8 [||])
         machine.Run [|
             Emit.abandonment 0
@@ -301,8 +304,7 @@ module JitTests =
             Emit.abandonment 6
             Emit.abandonment 7
         |]
-        Assert.That(machine.Arrays.Count, Is.EqualTo(8))
-        Assert.That(machine.Arrays.[0], Is.Null)
+        Assert.That(machine.Arrays.Count, Is.EqualTo(9))
         Assert.That(machine.Arrays.[1], Is.Null)
         Assert.That(machine.Arrays.[2], Is.Null)
         Assert.That(machine.Arrays.[3], Is.Null)
@@ -310,6 +312,7 @@ module JitTests =
         Assert.That(machine.Arrays.[5], Is.Null)
         Assert.That(machine.Arrays.[6], Is.Null)
         Assert.That(machine.Arrays.[7], Is.Null)
+        Assert.That(machine.Arrays.[8], Is.Null)
 
     [<Test>]
     let output () =
@@ -361,6 +364,17 @@ module JitTests =
         Assert.That(machine.R5, Is.EqualTo((uint32) 'f'))
         Assert.That(machine.R6, Is.EqualTo((uint32) 'g'))
         Assert.That(machine.R7, Is.EqualTo((uint32) 'h'))
+
+    [<Test>]
+    let load_program () =
+        let machine = new_machine()
+        machine.Arrays.Add([| Emit.orthography 0 42u |])
+        machine.R0 <- 0u
+        machine.R1 <- 1u
+        machine.Run [|
+            Emit.load_program 1 0
+        |]
+        Assert.That(machine.R0, Is.EqualTo(42u))
 
     [<Test>]
     let orthography () =

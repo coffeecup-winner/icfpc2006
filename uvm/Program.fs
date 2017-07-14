@@ -39,7 +39,6 @@ type Machine (in_stream, out_stream) =
         | 0 -> arrays.Add program_copy
         | _ -> arrays.[0] <- program_copy
         program <- arrays.[0]
-        ()
 
 let step (machine : Machine) : bool =
     let instr = machine.NextInstr()

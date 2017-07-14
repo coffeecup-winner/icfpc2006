@@ -29,20 +29,25 @@ type JitCompiledMachineData () =
     val mutable out : Stream
     [<DefaultValue>]
     val mutable arrays : System.Collections.Generic.List<uint32 array>
+    [<DefaultValue>]
+    val mutable script : uint32 array
 
 let new_machine_data () : JitCompiledMachineData =
     let data = new JitCompiledMachineData()
     data.arrays <- new System.Collections.Generic.List<uint32 array>()
+    data.arrays.Add(null) // zero array is special and is stored in a script field
     data
 
 module Field =
+    let private cls = typeof<JitCompiledMachineData>
     let Registers =
         [0..7]
-        |> List.map (fun r -> typeof<JitCompiledMachineData>.GetField("r" + r.ToString()))
+        |> List.map (fun r -> cls.GetField("r" + r.ToString()))
         |> List.toArray
-    let In = typeof<JitCompiledMachineData>.GetField("_in")
-    let Out = typeof<JitCompiledMachineData>.GetField("out")
-    let Arrays = typeof<JitCompiledMachineData>.GetField("arrays")
+    let In = cls.GetField("_in")
+    let Out = cls.GetField("out")
+    let Arrays = cls.GetField("arrays")
+    let Script = cls.GetField("script")
 
 let compile (il : ILGenerator) (instr : uint32) : unit =
     let opcode = instr &&& 0xf0000000u >>> 28
@@ -171,7 +176,27 @@ let compile (il : ILGenerator) (instr : uint32) : unit =
         il.MarkLabel(_end)        
         il.Emit(OpCodes.Stfld, Field.Registers.[c])
     | UvmOpCodes.LoadProgram ->
-        ()
+        let label = il.DefineLabel()
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
+        il.Emit(OpCodes.Ldc_I4_0)
+        il.Emit(OpCodes.Cgt_Un)
+        il.Emit(OpCodes.Brfalse_S, label)
+        // replace the code array (0)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, Field.Arrays)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
+        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32 array>>.GetMethod("get_Item"), null)
+        il.EmitCall(OpCodes.Callvirt, typeof<System.Array>.GetMethod("Clone"), null)
+        il.Emit(OpCodes.Castclass, typeof<uint32[]>)
+        il.Emit(OpCodes.Stfld, Field.Script)
+        // return the new PC
+        il.MarkLabel(label)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ret)
     | UvmOpCodes.Orthography ->
         let reg = (int32) (instr &&& 0b0000_1110_0000_0000_0000_0000_0000_0000u >>> 25)
         let value = instr &&& 0b0000_0001_1111_1111_1111_1111_1111_1111u
@@ -192,12 +217,17 @@ type JitCompiledMachine () =
     let data : JitCompiledMachineData = new_machine_data()
 
     member private this.Run (data : JitCompiledMachineData) (script : uint32 array) : unit =
+        data.script <- script
+        let mutable current_script = script
         let code_cache = new Dictionary<uint32, Func<JitCompiledMachineData, uint32>>()
         let mutable pc : uint32 = 0u
         while (pc <> 0xffffffffu) do
+            if current_script <> data.script then
+                current_script <- data.script
+                code_cache.Clear()
             let code : Func<JitCompiledMachineData, uint32> ref = ref null
             if not (code_cache.TryGetValue(pc, code)) then
-                code.Value <- jit_compile pc script
+                code.Value <- jit_compile pc current_script
                 code_cache.Add(pc, !code)
             pc <- (!code).Invoke(data)
 
