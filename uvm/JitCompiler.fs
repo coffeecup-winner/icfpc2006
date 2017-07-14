@@ -99,6 +99,14 @@ let compile (il : ILGenerator) (instr : uint32) : unit =
         il.Emit(OpCodes.Ldelem_U4)
         il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[a])
     | UvmOpCodes.ArrayAmendment ->
+        let label = il.DefineLabel()
+        il.Emit(OpCodes.Ldc_I4_0)
+        il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[a])
+        il.Emit(OpCodes.Cgt_Un)
+        il.Emit(OpCodes.Brfalse_S, label)
+        il.ThrowException(typeof<NotSupportedException>)
+        il.MarkLabel(label)
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Arrays)
         il.Emit(OpCodes.Ldarg_0)
@@ -225,9 +233,17 @@ let compile (il : ILGenerator) (instr : uint32) : unit =
     | x -> invalidOp("Invalid op code: " + x.ToString())
 
 let jit_compile (pc : uint32) (script : uint32 array) : Func<JitCompiledMachineData, uint32> =
+    let to_compile = Array.skip ((int) pc) script
+    let count =
+        match Array.tryFindIndex(fun instr -> instr >>> 28 = UvmOpCodes.LoadProgram) to_compile with
+        | Some idx -> idx + 1
+        | None -> to_compile.Length
     let method = new DynamicMethod("run_UVM_" + pc.ToString("x8"), typeof<uint32>, [|typeof<JitCompiledMachineData>|], typeof<JitCompiledMachineData>)
     let il = method.GetILGenerator()
-    Array.ForEach(script, fun instr -> compile il instr)
+    to_compile
+    |> Array.take count
+    |> Array.map (fun instr -> compile il instr)
+    |> ignore
     il.Emit(OpCodes.Ldc_I4, (int) 0xffffffff)
     il.Emit(OpCodes.Ret)
     method.CreateDelegate(typeof<Func<JitCompiledMachineData, uint32>>) :?> Func<JitCompiledMachineData, uint32>
