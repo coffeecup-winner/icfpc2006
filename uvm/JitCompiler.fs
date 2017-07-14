@@ -38,16 +38,36 @@ let new_machine_data () : JitCompiledMachineData =
     data.arrays.Add(null) // zero array is special and is stored in a script field
     data
 
-module Field =
-    let private cls = typeof<JitCompiledMachineData>
-    let Registers =
-        [0..7]
-        |> List.map (fun r -> cls.GetField("r" + r.ToString()))
-        |> List.toArray
-    let In = cls.GetField("_in")
-    let Out = cls.GetField("out")
-    let Arrays = cls.GetField("arrays")
-    let Script = cls.GetField("script")
+module TypeInfo =
+    module Machine =
+        let Type = typeof<JitCompiledMachineData>
+        let Registers =
+            [0..7]
+            |> List.map (fun r -> Type.GetField("r" + r.ToString()))
+            |> List.toArray
+        let In = Type.GetField("_in")
+        let Out = Type.GetField("out")
+        let Arrays = Type.GetField("arrays")
+        let Script = Type.GetField("script")
+
+    module UInt32 =
+        let Type = typeof<uint32>
+
+    module UInt32Array =
+        let Type = typeof<uint32[]>
+        let Clone = Type.GetMethod("Clone")
+
+    module ArraysList =
+        let Type = typeof<System.Collections.Generic.List<uint32[] array>>
+        let GetItem = Type.GetMethod("get_Item")
+        let SetItem = Type.GetMethod("set_Item")
+        let Add = Type.GetMethod("Add")
+        let Count = Type.GetMethod("get_Count")
+
+    module Stream =
+        let Type = typeof<Stream>
+        let ReadByte = Type.GetMethod("ReadByte")
+        let WriteByte = Type.GetMethod("WriteByte")
 
 let compile (il : ILGenerator) (instr : uint32) : unit =
     let opcode = instr &&& 0xf0000000u >>> 28
@@ -58,108 +78,108 @@ let compile (il : ILGenerator) (instr : uint32) : unit =
     | UvmOpCodes.ConditionalMove ->
         let label = il.DefineLabel()
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.Ldc_I4_0)
         il.Emit(OpCodes.Cgt_Un)
         il.Emit(OpCodes.Brfalse_S, label)
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
-        il.Emit(OpCodes.Stfld, Field.Registers.[a])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[a])
         il.MarkLabel(label)
     | UvmOpCodes.ArrayIndex ->
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Arrays)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Arrays)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
-        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32[] array>>.GetMethod("get_Item"), null)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.ArraysList.GetItem, null)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.Ldelem_U4)
-        il.Emit(OpCodes.Stfld, Field.Registers.[a])
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[a])
     | UvmOpCodes.ArrayAmendment ->
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Arrays)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Arrays)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[a])
-        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32[] array>>.GetMethod("get_Item"), null)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[a])
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.ArraysList.GetItem, null)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.Stelem_I4)
     | UvmOpCodes.Addition ->
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.Add)
-        il.Emit(OpCodes.Stfld, Field.Registers.[a])
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[a])
     | UvmOpCodes.Multiplication ->
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.Mul)
-        il.Emit(OpCodes.Stfld, Field.Registers.[a])
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[a])
     | UvmOpCodes.Division ->
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.Div_Un)
-        il.Emit(OpCodes.Stfld, Field.Registers.[a])
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[a])
     | UvmOpCodes.NotAnd ->
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.And)
         il.Emit(OpCodes.Not)
-        il.Emit(OpCodes.Stfld, Field.Registers.[a])
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[a])
     | UvmOpCodes.Halt ->
         il.Emit(OpCodes.Ldc_I4, (int) 0xffffffff)
         il.Emit(OpCodes.Ret)
     | UvmOpCodes.Allocation ->
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Arrays)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Arrays)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
-        il.Emit(OpCodes.Newarr, typeof<uint32>)
-        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32 array>>.GetMethod("Add"), null)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
+        il.Emit(OpCodes.Newarr, TypeInfo.UInt32.Type)
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.ArraysList.Add, null)
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Arrays)
-        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32 array>>.GetMethod("get_Count"), null)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Arrays)
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.ArraysList.Count, null)
         il.Emit(OpCodes.Ldc_I4_1)
         il.Emit(OpCodes.Sub)
-        il.Emit(OpCodes.Stfld, Field.Registers.[b])
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[b])
     | UvmOpCodes.Abandonment ->
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Arrays)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Arrays)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.Ldnull)
-        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32 array>>.GetMethod("set_Item"), null)
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.ArraysList.SetItem, null)
     | UvmOpCodes.Output ->
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Out)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Out)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.Conv_U1)
-        il.EmitCall(OpCodes.Callvirt, typeof<Stream>.GetMethod("WriteByte"), null)
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.Stream.WriteByte, null)
     | UvmOpCodes.Input ->
         let _else = il.DefineLabel()
         let _end = il.DefineLabel()
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.In)
-        il.EmitCall(OpCodes.Callvirt, typeof<Stream>.GetMethod("ReadByte"), null)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.In)
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.Stream.ReadByte, null)
         il.Emit(OpCodes.Dup)
         // if key == 0
         il.Emit(OpCodes.Ldc_I4_0)
@@ -174,35 +194,34 @@ let compile (il : ILGenerator) (instr : uint32) : unit =
         il.Emit(OpCodes.Conv_U)
         // store
         il.MarkLabel(_end)        
-        il.Emit(OpCodes.Stfld, Field.Registers.[c])
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[c])
     | UvmOpCodes.LoadProgram ->
         let label = il.DefineLabel()
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
         il.Emit(OpCodes.Ldc_I4_0)
         il.Emit(OpCodes.Cgt_Un)
         il.Emit(OpCodes.Brfalse_S, label)
         // replace the code array (0)
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Arrays)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Arrays)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[b])
-        il.EmitCall(OpCodes.Callvirt, typeof<System.Collections.Generic.List<uint32 array>>.GetMethod("get_Item"), null)
-        il.EmitCall(OpCodes.Callvirt, typeof<System.Array>.GetMethod("Clone"), null)
-        il.Emit(OpCodes.Castclass, typeof<uint32[]>)
-        il.Emit(OpCodes.Stfld, Field.Script)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.ArraysList.GetItem, null)
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.UInt32Array.Clone, null)
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Script)
         // return the new PC
         il.MarkLabel(label)
         il.Emit(OpCodes.Ldarg_0)
-        il.Emit(OpCodes.Ldfld, Field.Registers.[c])
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[c])
         il.Emit(OpCodes.Ret)
     | UvmOpCodes.Orthography ->
         let reg = (int32) (instr &&& 0b0000_1110_0000_0000_0000_0000_0000_0000u >>> 25)
         let value = instr &&& 0b0000_0001_1111_1111_1111_1111_1111_1111u
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldc_I4, (int32) value)
-        il.Emit(OpCodes.Stfld, Field.Registers.[reg])
+        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[reg])
     | x -> invalidOp("Invalid op code: " + x.ToString())
 
 let jit_compile (pc : uint32) (script : uint32 array) : Func<JitCompiledMachineData, uint32> =
