@@ -62,6 +62,9 @@
     <None Include="data\sandmark.umz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="data\umix.umz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="IMachine.fs" />
     <Compile Include="UvmOpCodes.fs" />
