@@ -291,23 +291,25 @@ type JitCompiledMachine () =
         print_listing 5 1 true +
         print_listing 6 5 false
 
-    member private this.Run (data : JitCompiledMachineData) (script : uint32 array) : unit =
+    let run (script : uint32 array) : unit =
         data.arrays.[0] <- script
-        let mutable current_script = script
-        let code_cache = new Dictionary<uint32, Func<JitCompiledMachineData, uint32>>()
+        let mutable current_script = null
+        let mutable code_cache : Func<JitCompiledMachineData, uint32> array = null
         let mutable pc : uint32 = 0u
         while (pc <> 0xffffffffu) do
             if not (Object.ReferenceEquals(current_script, data.script)) then
                 current_script <- data.script
-                code_cache.Clear()
-            let code : Func<JitCompiledMachineData, uint32> ref = ref null
-            if not (code_cache.TryGetValue(pc, code)) then
-                code.Value <- jit_compile pc current_script
-                code_cache.Add(pc, !code)
+                code_cache <-
+                    current_script
+                        |> Array.map (fun _ -> null)
+            let mutable code = code_cache.[(int) pc]
+            if Object.ReferenceEquals(code, null) then
+                code <- jit_compile pc current_script
+                code_cache.[(int) pc] <- code
             #if DEBUG
             try
             #endif
-            pc <- (!code).Invoke(data)
+            pc <- (code).Invoke(data)
             #if DEBUG
             with
             | e ->
@@ -360,4 +362,4 @@ type JitCompiledMachine () =
             data.out <- out
 
         member this.Run (script : uint32 array) =
-            this.Run data script
+            run script
