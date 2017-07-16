@@ -31,6 +31,8 @@ type JitCompiledMachineData () =
     val mutable arrays : System.Collections.Generic.List<uint32 array>
     [<DefaultValue>]
     val mutable script : uint32 array
+    [<DefaultValue>]
+    val mutable pc : uint32
 
 let new_machine_data () : JitCompiledMachineData =
     let data = new JitCompiledMachineData()
@@ -49,6 +51,7 @@ module TypeInfo =
         let Out = Type.GetField("out")
         let Arrays = Type.GetField("arrays")
         let Script = Type.GetField("script")
+        let PC = Type.GetField("pc")
 
     module UInt32 =
         let Type = typeof<uint32>
@@ -231,6 +234,14 @@ let compile (il : ILGenerator) (instr : uint32) : unit =
         il.Emit(OpCodes.Ldc_I4, (int32) value)
         il.Emit(OpCodes.Stfld, TypeInfo.Machine.Registers.[reg])
     | x -> invalidOp("Invalid op code: " + x.ToString())
+    #if DEBUG
+    il.Emit(OpCodes.Ldarg_0)
+    il.Emit(OpCodes.Ldarg_0)
+    il.Emit(OpCodes.Ldfld, TypeInfo.Machine.PC)
+    il.Emit(OpCodes.Ldc_I4_1)
+    il.Emit(OpCodes.Add)
+    il.Emit(OpCodes.Stfld, TypeInfo.Machine.PC)
+    #endif
 
 let jit_compile (pc : uint32) (script : uint32 array) : Func<JitCompiledMachineData, uint32> =
     let to_compile = Array.skip ((int) pc) script
@@ -251,6 +262,33 @@ let jit_compile (pc : uint32) (script : uint32 array) : Func<JitCompiledMachineD
 type JitCompiledMachine () =
     let data : JitCompiledMachineData = new_machine_data()
 
+    let print_state (script : uint32 array) : string =
+        let listing =
+            script
+            |> Seq.skip ((int) data.pc - 5)
+            |> Seq.take 11
+            |> Seq.toArray
+            |> ByteCodePrinter.print_all
+        let print_listing to_skip to_take point =
+            listing
+            |> Seq.indexed
+            |> Seq.skip to_skip
+            |> Seq.take to_take
+            |> Seq.map (fun (i, s) -> sprintf " %s %04x %s" (if point then "->" else "  ") i s)
+            |> fun lines -> String.Join("\n", lines) + "\n"
+        let print_arrays =
+            data.arrays
+            |> Seq.map (fun a -> if a = null then "<null>" else a.Length.ToString())
+            |> fun arrays -> String.Join(", ", arrays)
+        sprintf "Data:\n" +
+        sprintf "r0 = 0x%08x; r1 = 0x%08x; r2 = 0x%08x; r3 = 0x%08x;\n" data.r0 data.r1 data.r2 data.r3 +
+        sprintf "r4 = 0x%08x; r5 = 0x%08x; r6 = 0x%08x; r7 = 0x%08x;\n" data.r4 data.r5 data.r6 data.r7 +
+        sprintf "arr = [%s]; pc = 0x%04x;\n" print_arrays data.pc +
+        sprintf "Code:\n" +
+        print_listing 0 5 false +
+        print_listing 5 1 true +
+        print_listing 6 5 false
+
     member private this.Run (data : JitCompiledMachineData) (script : uint32 array) : unit =
         data.script <- script
         let mutable current_script = script
@@ -264,7 +302,20 @@ type JitCompiledMachine () =
             if not (code_cache.TryGetValue(pc, code)) then
                 code.Value <- jit_compile pc current_script
                 code_cache.Add(pc, !code)
+            #if DEBUG
+            try
+            #endif
             pc <- (!code).Invoke(data)
+            #if DEBUG
+            with
+            | e ->
+                let message =
+                    print_state current_script +
+                    sprintf "Exception:\n" +
+                    e.Message
+                raise (exn(message, e))
+            #endif
+            data.pc <- pc
 
     interface IMachine with
         member this.R0

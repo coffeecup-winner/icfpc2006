@@ -65,6 +65,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="IMachine.fs" />
     <Compile Include="UvmOpCodes.fs" />
+    <Compile Include="ByteCodePrinter.fs" />
     <Compile Include="JitCompiler.fs" />
     <Compile Include="Program.fs" />
     <None Include="App.config" />
