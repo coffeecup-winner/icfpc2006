@@ -1,6 +1,8 @@
 ﻿open System.IO
 open System.Collections.Generic
 open System
+open Generic
+open JitCompiler
 
 let read_script filename =
     use stream = File.OpenRead filename
@@ -107,12 +109,20 @@ let rec run machine : unit =
     | true -> run machine
     | false -> ()
 
-[<EntryPoint>]
-let main argv = 
-    let script = read_script argv.[0]
-    use _in = Console.OpenStandardInput()
-    use out = Console.OpenStandardOutput()
+let run_jitted _in out script =
+    let machine = new JitCompiledMachine() :> IMachine
+    machine.SetIOStreams _in out
+    machine.Run script
+
+let run_interpreted _in out script =
     let machine = Machine(_in, out)
     machine.LoadProgram script
     run machine
+
+[<EntryPoint>]
+let main argv = 
+    use _in = Console.OpenStandardInput()
+    use out = Console.OpenStandardOutput()
+    let script = read_script argv.[0]
+    run_jitted _in out script
     0
