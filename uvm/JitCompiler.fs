@@ -30,9 +30,10 @@ type JitCompiledMachineData () =
     [<DefaultValue>]
     val mutable arrays : System.Collections.Generic.List<uint32 array>
     [<DefaultValue>]
-    val mutable script : uint32 array
-    [<DefaultValue>]
     val mutable pc : uint32
+
+    member this.script : uint32 array =
+        this.arrays.[0]
 
 let new_machine_data () : JitCompiledMachineData =
     let data = new JitCompiledMachineData()
@@ -50,7 +51,6 @@ module TypeInfo =
         let In = Type.GetField("_in")
         let Out = Type.GetField("out")
         let Arrays = Type.GetField("arrays")
-        let Script = Type.GetField("script")
         let PC = Type.GetField("pc")
 
     module UInt32 =
@@ -215,13 +215,15 @@ let compile (il : ILGenerator) (instr : uint32) : unit =
         il.Emit(OpCodes.Brfalse_S, label)
         // replace the code array (0)
         il.Emit(OpCodes.Ldarg_0)
+        il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Arrays)
+        il.Emit(OpCodes.Ldc_I4_0)
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Arrays)
         il.Emit(OpCodes.Ldarg_0)
         il.Emit(OpCodes.Ldfld, TypeInfo.Machine.Registers.[b])
         il.EmitCall(OpCodes.Callvirt, TypeInfo.ArraysList.GetItem, null)
         il.EmitCall(OpCodes.Callvirt, TypeInfo.UInt32Array.Clone, null)
-        il.Emit(OpCodes.Stfld, TypeInfo.Machine.Script)
+        il.EmitCall(OpCodes.Callvirt, TypeInfo.ArraysList.SetItem, null)
         // return the new PC
         il.MarkLabel(label)
         il.Emit(OpCodes.Ldarg_0)
@@ -290,12 +292,12 @@ type JitCompiledMachine () =
         print_listing 6 5 false
 
     member private this.Run (data : JitCompiledMachineData) (script : uint32 array) : unit =
-        data.script <- script
+        data.arrays.[0] <- script
         let mutable current_script = script
         let code_cache = new Dictionary<uint32, Func<JitCompiledMachineData, uint32>>()
         let mutable pc : uint32 = 0u
         while (pc <> 0xffffffffu) do
-            if current_script <> data.script then
+            if not (Object.ReferenceEquals(current_script, data.script)) then
                 current_script <- data.script
                 code_cache.Clear()
             let code : Func<JitCompiledMachineData, uint32> ref = ref null
