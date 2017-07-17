@@ -246,18 +246,18 @@ let compile (il : ILGenerator) (instr : uint32) : unit =
     #endif
 
 let jit_compile (pc : uint32) (script : uint32 array) : Func<JitCompiledMachineData, uint32> =
-    let to_compile = Array.skip ((int) pc) script
-    let count =
-        match Array.tryFindIndex(fun instr -> instr >>> 28 = UvmOpCodes.LoadProgram) to_compile with
-        | Some idx -> idx + 1
-        | None -> to_compile.Length
     let method = new DynamicMethod("run_UVM_" + pc.ToString("x8"), typeof<uint32>, [|typeof<JitCompiledMachineData>|], typeof<JitCompiledMachineData>)
     let il = method.GetILGenerator()
-    to_compile
-    |> Array.take count
-    |> Array.map (fun instr -> compile il instr)
-    |> ignore
-    il.Emit(OpCodes.Ldc_I4, (int) 0xffffffff)
+    let mutable do_compile = true
+    let mutable count = 0
+    let max_count = 256
+    while do_compile do
+        let instr = script.[(int) pc + count]
+        compile il instr
+        count <- count + 1
+        if count > max_count || (int) pc + count = script.Length || instr >>> 28 = UvmOpCodes.LoadProgram then
+            do_compile <- false
+    il.Emit(OpCodes.Ldc_I4, (int) pc + count)
     il.Emit(OpCodes.Ret)
     method.CreateDelegate(typeof<Func<JitCompiledMachineData, uint32>>) :?> Func<JitCompiledMachineData, uint32>
 
