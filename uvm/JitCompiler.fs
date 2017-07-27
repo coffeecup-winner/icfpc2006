@@ -3,6 +3,7 @@
 open System
 open System.Collections.Generic
 open System.IO
+open System.Reflection
 open System.Reflection.Emit
 open Generic
 
@@ -43,7 +44,7 @@ let new_machine_data () : JitCompiledMachineData =
 
 module TypeInfo =
     module Machine =
-        let Type = typeof<JitCompiledMachineData>
+        let Type = typeof<JitCompiledMachineData>.GetTypeInfo()
         let Registers =
             [0..7]
             |> List.map (fun r -> Type.GetField("r" + r.ToString()))

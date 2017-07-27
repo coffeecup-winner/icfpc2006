@@ -58,8 +58,8 @@ module JitTests =
 
     [<Test>]
     let empty_script () =
-        (new_machine()).Run([| Emit.halt |])
-    
+        new_machine().Run [| Emit.halt |]
+
     [<Test>]
     let conditional_move () =
         let machine = new_machine()
@@ -348,7 +348,9 @@ module JitTests =
             Emit.output 7
             Emit.halt
         |]
-        Assert.That(Encoding.UTF8.GetString(out_stream.GetBuffer(), 0, 8), Is.EqualTo("abcdefgh"))
+        out_stream.Position <- 0L
+        use reader = new StreamReader(out_stream)
+        Assert.That(reader.ReadToEnd(), Is.EqualTo("abcdefgh"))
 
     [<Test>]
     let input () =
@@ -380,10 +382,10 @@ module JitTests =
     [<Test>]
     let load_program () =
         let machine = new_machine()
-        machine.Arrays.Add([|
+        machine.Arrays.Add [|
             Emit.orthography 0 42u
             Emit.halt
-        |])
+        |]
         machine.R0 <- 0u
         machine.R1 <- 1u
         machine.Run [|
