@@ -58,7 +58,7 @@ module JitTests =
 
     [<Test>]
     let empty_script () =
-        (new_machine()).Run([||])
+        (new_machine()).Run([| Emit.halt |])
     
     [<Test>]
     let conditional_move () =
@@ -72,6 +72,7 @@ module JitTests =
             Emit.conditional_move 0 1 2
             Emit.conditional_move 3 4 5
             Emit.conditional_move 5 6 7
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(0u))
         Assert.That(machine.R1, Is.EqualTo(1u))
@@ -97,6 +98,7 @@ module JitTests =
             Emit.array_index 0 1 2
             Emit.array_index 3 4 5
             Emit.array_index 5 6 7
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(42u))
         Assert.That(machine.R1, Is.EqualTo(1u))
@@ -124,6 +126,7 @@ module JitTests =
             Emit.array_amendment 0 1 2
             Emit.array_amendment 3 4 5
             Emit.array_amendment 5 6 7
+            Emit.halt
         |]
         Assert.That(machine.Arrays.[1], Is.EquivalentTo([|42u; 2u|]))
         Assert.That(machine.Arrays.[2], Is.EquivalentTo([|100u|]))
@@ -141,6 +144,7 @@ module JitTests =
             Emit.addition 0 1 2
             Emit.addition 3 4 5
             Emit.addition 5 6 7
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(1u))
         Assert.That(machine.R1, Is.EqualTo(0u))
@@ -164,6 +168,7 @@ module JitTests =
             Emit.multiplication 0 1 2
             Emit.multiplication 3 4 5
             Emit.multiplication 5 6 7
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(0u))
         Assert.That(machine.R1, Is.EqualTo(0u))
@@ -187,6 +192,7 @@ module JitTests =
             Emit.division 0 1 2
             Emit.division 3 4 5
             Emit.division 5 6 7
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(0u))
         Assert.That(machine.R1, Is.EqualTo(0u))
@@ -210,6 +216,7 @@ module JitTests =
             Emit.not_and 0 1 2
             Emit.not_and 3 4 5
             Emit.not_and 5 6 7
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(0xffffffffu))
         Assert.That(machine.R1, Is.EqualTo(0u))
@@ -233,6 +240,7 @@ module JitTests =
             Emit.orthography 5 42u
             Emit.orthography 6 42u
             Emit.orthography 7 42u
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(42u))
         Assert.That(machine.R1, Is.EqualTo(42u))
@@ -263,6 +271,7 @@ module JitTests =
             Emit.allocation 5 5
             Emit.allocation 6 6
             Emit.allocation 7 7
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(1u))
         Assert.That(machine.R1, Is.EqualTo(2u))
@@ -303,6 +312,7 @@ module JitTests =
             Emit.abandonment 5
             Emit.abandonment 6
             Emit.abandonment 7
+            Emit.halt
         |]
         Assert.That(machine.Arrays.Count, Is.EqualTo(9))
         Assert.That(machine.Arrays.[1], Is.Null)
@@ -336,6 +346,7 @@ module JitTests =
             Emit.output 5
             Emit.output 6
             Emit.output 7
+            Emit.halt
         |]
         Assert.That(Encoding.UTF8.GetString(out_stream.GetBuffer(), 0, 8), Is.EqualTo("abcdefgh"))
 
@@ -355,6 +366,7 @@ module JitTests =
             Emit.input 5
             Emit.input 6
             Emit.input 7
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo((uint32) 'a'))
         Assert.That(machine.R1, Is.EqualTo((uint32) 'b'))
@@ -368,11 +380,15 @@ module JitTests =
     [<Test>]
     let load_program () =
         let machine = new_machine()
-        machine.Arrays.Add([| Emit.orthography 0 42u |])
+        machine.Arrays.Add([|
+            Emit.orthography 0 42u
+            Emit.halt
+        |])
         machine.R0 <- 0u
         machine.R1 <- 1u
         machine.Run [|
             Emit.load_program 1 0
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(42u))
 
@@ -389,6 +405,7 @@ module JitTests =
             Emit.orthography 5 0x01ffffu
             Emit.orthography 6 0x01fffffu
             Emit.orthography 7 0x01ffffffu
+            Emit.halt
         |]
         Assert.That(machine.R0, Is.EqualTo(0x00u))
         Assert.That(machine.R1, Is.EqualTo(0x01u))
