@@ -1,5 +1,5 @@
 [package]
-name = "icfpc2006"
+name = "um32"
 version = "0.1.0"
 authors = ["Dmitry Polyanitsa <coffeecup.winner@gmail.com>"]
 edition = "2018"
