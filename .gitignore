@@ -1,7 +1,6 @@
-.vs/
-bin/
-obj/
-packages/
+/target
+
+.vscode
 
 # project-specific
 *.umz
