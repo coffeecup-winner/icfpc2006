@@ -2,6 +2,7 @@ use std::io::{self, Read, Write};
 
 pub fn run(program: Vec<u32>) -> io::Result<()> {
     let mut data = vec![program; 1];
+    let mut free = vec![0usize; 0];
     let mut ip = 0;
     let mut registers = vec![0u32; 8];
     let stdin_ = io::stdin();
@@ -88,13 +89,21 @@ pub fn run(program: Vec<u32>) -> io::Result<()> {
                 insn >>= 3;
                 let b = insn & 0x7;
                 let new_arr = vec![0; registers[c as usize] as usize];
-                data.push(new_arr);
-                registers[b as usize] = (data.len() - 1) as u32;
+                let new_idx = if let Some(idx) = free.pop() {
+                    data[idx] = new_arr;
+                    idx
+                } else {
+                    data.push(new_arr);
+                    data.len() - 1
+                };
+                registers[b as usize] = new_idx as u32;
             }
             // Abandonment
             9 => {
                 let c = insn & 0x7;
-                data[registers[c as usize] as usize].clear();
+                let idx = registers[c as usize] as usize;
+                data[idx].clear();
+                free.push(idx);
             }
             // Output
             10 => {
